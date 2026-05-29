@@ -1,49 +1,142 @@
 # AWS Deployment Guide
 
-## Recommended V1 Default: EC2 + Docker
+## Default V1 Path: EC2 + Docker
 
-For a private family-use v1, the default deployment path should be a small EC2 instance running Docker Compose.
+A small EC2 instance running Docker Compose is the recommended v1 deployment. It is the simplest option, easy to debug, and handles WeasyPrint system dependencies without surprises.
 
-Why this is the default:
-- simple to understand
-- easy to debug
-- good fit for WeasyPrint system dependencies
-- low operational complexity for a single private workload
+---
 
-## EC2 Docker Steps
+## Local Docker Run
 
-1. Launch a small Ubuntu EC2 instance.
-2. Install Docker and Docker Compose plugin.
-3. Clone the repository.
-4. Copy `.env.example` to `.env` and fill in real values.
-5. Run `docker compose up --build -d`.
-6. Put Nginx or Caddy in front if you need TLS termination on the box.
-7. Store generated files under the mounted `./data` volume or push outputs to S3.
+```bash
+cp .env.example .env        # fill in real values
+docker compose up --build    # builds image & starts on port 8000
+curl http://localhost:8000/healthz
+```
 
-## App Runner
+Stop with `docker compose down`. Data persists in the `./data` volume mount.
 
-App Runner can be included for already-eligible accounts, but it is optional.
+---
 
-Notes:
-- App Runner can be attractive for simple container deployment.
-- WeasyPrint system packages and local filesystem assumptions should be tested carefully.
-- For new customers or greenfield setups, EC2 Docker or ECS Express Mode may be more predictable.
+## EC2 Docker Deployment
 
-## ECS Express Mode
+### 1. Launch instance
 
-ECS Express Mode is a modern managed alternative when you want less EC2 administration.
+- **AMI:** Ubuntu 22.04 or 24.04, `t3.small` or larger.
+- **Security group:** allow TCP 8000 (or 443 if fronting with TLS).
+- **Storage:** 20 GB gp3 minimum.
 
-Why consider it:
-- better long-term managed posture
-- container-native
-- easier evolution if background workers are added later
+### 2. Install Docker
 
-## Storage
+```bash
+sudo apt-get update
+sudo apt-get install -y docker.io docker-compose-v2
+sudo usermod -aG docker $USER
+# log out and back in for group change
+```
 
-- S3 should hold finished PDFs and durable artifacts.
-- Local mounted `data/` can be used for temporary work files and local outbox behavior.
+### 3. Deploy
 
-## Email
+```bash
+git clone <your-repo-url> StoryPipeline && cd StoryPipeline
+cp .env.example .env
+# edit .env — set API_KEY, OPENAI_API_KEY, S3_BUCKET, SES_SENDER_EMAIL, etc.
+docker compose up --build -d
+```
 
-- Use SES for success/failure emails.
-- Start in sandbox or verified-sender mode if needed.
+### 4. Verify
+
+```bash
+curl http://localhost:8000/healthz   # → {"status":"ok"}
+curl http://localhost:8000/version   # → app info
+```
+
+---
+
+## IAM Instance Profile Policy
+
+Attach an IAM role to the EC2 instance instead of embedding credentials. Minimum policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3StorybookBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::YOUR_BUCKET/storybook/*"
+    },
+    {
+      "Sid": "SESSend",
+      "Effect": "Allow",
+      "Action": [
+        "ses:SendEmail",
+        "ses:SendRawEmail"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "ses:FromAddress": "YOUR_VERIFIED_SENDER@example.com"
+        }
+      }
+    }
+  ]
+}
+```
+
+Replace `YOUR_BUCKET` and the sender address. Scope `ses:SendEmail` further if you need tighter controls.
+
+---
+
+## S3 Bucket Configuration
+
+- **Block all public access** — enable all four public-access-block settings.
+- **Server-side encryption** — use SSE-S3 (AES-256) or SSE-KMS.
+- **Versioning** — optional but recommended for durability.
+- The app generates **presigned download URLs** with configurable expiry (`DOWNLOAD_URL_EXPIRES_SECONDS`, default 1 hour) so PDFs are never public.
+
+---
+
+## SES Email
+
+- **Verify sender identity** — either a specific email or the entire domain in SES.
+- **Sandbox mode:** New SES accounts start in sandbox; you can only send to verified recipients. Request production access when ready.
+- `EMAIL_DELIVERY_ENABLED=false` by default — the app writes PDFs to local outbox until you're ready.
+
+---
+
+## HTTPS
+
+Do **not** expose port 8000 directly in production. Options:
+
+- **Caddy** (simplest) — automatic Let's Encrypt TLS, reverse proxy to `localhost:8000`.
+- **ALB + ACM** — AWS-managed TLS via Application Load Balancer with a free ACM certificate.
+
+---
+
+## App Runner (Optional — Eligible Accounts Only)
+
+> **Caveat:** App Runner is **not** the default recommendation. Use it only if you already have an eligible App Runner account and are comfortable with its constraints.
+
+An `apprunner.yaml` is included for convenience. Key considerations:
+
+- WeasyPrint requires system libraries — use the ECR image-based deployment (push your Docker image), not source-code mode.
+- Local filesystem is ephemeral on App Runner; all artifacts must go to S3.
+- Cold-start latency may be noticeable for infrequent use.
+
+---
+
+## ECS Express Mode (Alternative)
+
+ECS Express Mode is a newer AWS managed-container option that removes much of the traditional ECS/Fargate configuration overhead. Consider it when:
+
+- You want a managed container experience without EC2 administration.
+- You may add background workers or multi-service architectures later.
+- You prefer staying within the ECS ecosystem for future scaling.
+
+It is a reasonable upgrade path from EC2 Docker once operational needs grow.

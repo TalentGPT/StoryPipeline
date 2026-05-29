@@ -1,14 +1,32 @@
+# App Runner source-image configuration.
+# Only for existing App Runner-eligible accounts — not the default deployment.
+# WeasyPrint system dependencies require a custom Docker image;
+# use the image-based (ECR) deployment path, not the source-code path.
 version: 1.0
-runtime: python3
+runtime: python312
 build:
   commands:
+    pre-build:
+      - apt-get update && apt-get install -y --no-install-recommends
+          libgdk-pixbuf-2.0-0 libpango-1.0-0 libpangocairo-1.0-0
+          libpangoft2-1.0-0 libcairo2 libglib2.0-0 shared-mime-info
+          fonts-liberation && rm -rf /var/lib/apt/lists/*
     build:
-      - pip install -r requirements.txt
+      - pip install --no-cache-dir -r requirements.txt
 run:
-  runtime-version: 3.12
   command: uvicorn app.main:app --host 0.0.0.0 --port 8000
   network:
     port: 8000
   env:
     - name: APP_ENV
-      value: production
+      value: "production"
+    - name: REQUIRE_API_KEY
+      value: "true"
+    - name: S3_BUCKET
+      value: "CHANGE_ME"
+    - name: AWS_REGION
+      value: "us-east-1"
+    - name: SES_SENDER_EMAIL
+      value: "CHANGE_ME"
+    - name: EMAIL_DELIVERY_ENABLED
+      value: "false"

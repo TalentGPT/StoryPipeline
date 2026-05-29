@@ -1,6 +1,6 @@
 # Family Storybook V1
 
-A private family photo-to-children’s-storybook product built with Python and FastAPI.
+A private family photo-to-children's-storybook product built with Python and FastAPI.
 
 **Photos in → PDF out.**
 
@@ -39,7 +39,25 @@ tests/
 data/
 ```
 
-## Local Development
+## Quick Start — Docker (Recommended)
+
+The fastest way to run locally or deploy:
+
+```bash
+cp .env.example .env          # fill in your values
+docker compose up --build      # builds image & starts on port 8000
+```
+
+Verify it's running:
+
+```bash
+curl http://localhost:8000/healthz
+# → {"status":"ok"}
+```
+
+Stop with `docker compose down`. Data persists in the `./data` volume mount.
+
+## Local Development (Without Docker)
 
 ### 1. Create a virtual environment
 
@@ -60,6 +78,8 @@ python -m venv .venv
 ```bash
 pip install -r requirements.txt
 ```
+
+WeasyPrint requires system libraries (libpango, libcairo, etc.). See the [Dockerfile](Dockerfile) for the full list, or the [WeasyPrint docs](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation).
 
 ### 3. Create env file
 
@@ -98,19 +118,21 @@ See:
 - `docs/shortcut_payload_contract.md`
 - `docs/ios_shortcut_build.md`
 
-## Deployment Options
+## Deployment
 
-### Default V1 Recommendation: EC2 + Docker
+### Default V1: EC2 + Docker
 
-This is the default recommendation because it is the simplest and easiest to debug for a private family workload with WeasyPrint dependencies.
+EC2 running Docker Compose is the default v1 deployment — simple, debuggable, and handles WeasyPrint system dependencies without friction.
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-### App Runner
+See `docs/aws_deployment.md` for full EC2 setup, IAM policy, S3, SES, and HTTPS guidance.
 
-Include `apprunner.yaml` only as an optional deployment path for already-eligible App Runner users. It is not the default recommendation for new customers.
+### App Runner (Optional)
+
+An `apprunner.yaml` is included only for already-eligible App Runner accounts. It is **not** the default recommendation. See `docs/aws_deployment.md` for caveats.
 
 ### ECS Express Mode
 
@@ -150,8 +172,6 @@ Important settings include:
 See `docs/security_privacy.md`.
 
 ## Testing / Validation
-
-For this scaffold stage, validate:
 
 ```bash
 python -m compileall app
