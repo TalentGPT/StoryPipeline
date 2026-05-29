@@ -8,7 +8,6 @@ vision produces an ``ImageDescriptionSet``.
 from __future__ import annotations
 
 import time
-import traceback
 
 from app.config import get_settings
 from app.logging_config import get_logger
@@ -31,7 +30,7 @@ def _concise_error(exc: Exception) -> str:
     """Return a short, safe error string suitable for storing/returning to callers."""
     msg = f"{type(exc).__name__}: {exc}"
     if len(msg) > _MAX_ERROR_LEN:
-        msg = msg[:_MAX_ERROR_LEN] + "…"
+        msg = msg[: _MAX_ERROR_LEN] + "…"
     return msg
 
 
@@ -42,8 +41,8 @@ def process_storybook_job(job_id: str) -> None:
         1. Load job & request
         2. Vision analysis  →  ImageDescriptionSet   (TODO: wire real vision)
         3. Story generation with critic retry loop
-        4. PDF rendering                              (TODO)
-        5. S3 upload + email delivery                  (TODO)
+        4. PDF rendering
+        5. S3 upload + email delivery
     """
     settings = get_settings()
     job_store = JobStore(settings.job_store_path)
@@ -62,6 +61,7 @@ def process_storybook_job(job_id: str) -> None:
         )
         raise ValueError(f"Unknown job_id: {job_id}")
 
+    request: StorybookRequest | None = None
     try:
         job_store.update_job_status(job_id, "processing")
 
@@ -83,7 +83,11 @@ def process_storybook_job(job_id: str) -> None:
         pdf_bytes = render_pdf(story, settings=settings)
         LOGGER.info(
             "job lifecycle",
-            extra={"job_id": job_id, "event": "pdf_rendered", "size_bytes": len(pdf_bytes)},
+            extra={
+                "job_id": job_id,
+                "event": "pdf_rendered",
+                "status": "ok",
+            },
         )
 
         # ── Upload / persist ──────────────────────────────────────
@@ -109,6 +113,8 @@ def process_storybook_job(job_id: str) -> None:
             },
         )
 
+        _send_success_email(request, job_id, pdf_url=pdf_url)
+
     except StoryGenerationError as exc:
         elapsed_ms = int((time.monotonic() - t0) * 1000)
         error_msg = _concise_error(exc)
@@ -123,7 +129,7 @@ def process_storybook_job(job_id: str) -> None:
             },
             exc_info=True,
         )
-        _send_failure_email(job_id, error_msg)
+        _send_failure_email(request, job_id, error_msg)
 
     except Exception as exc:  # noqa: BLE001
         elapsed_ms = int((time.monotonic() - t0) * 1000)
@@ -138,58 +144,7 @@ def process_storybook_job(job_id: str) -> None:
                 "duration_ms": elapsed_ms,
             },
         )
-        _send_failure_email(job_id, error_msg)
-
-
-def _send_failure_email(job_id: str, error_msg: str) -> None:
-    """Best-effort failure notification via SES when configured."""
-    settings = get_settings()
-    if not settings.email_delivery_enabled:
-        return
-    if not settings.ses_sender_email or not settings.ses_admin_email:
-        LOGGER.warning(
-            "job lifecycle",
-            extra={
-                "job_id": job_id,
-                "event": "failure_email_skipped",
-                "status": "warning",
-            },
-        )
-        return
-
-    try:
-        import boto3  # late import to keep module importable without boto3 in tests
-
-        client = boto3.client("ses", region_name=settings.aws_region)
-        client.send_email(
-            Source=settings.ses_sender_email,
-            Destination={"ToAddresses": [settings.ses_admin_email]},
-            Message={
-                "Subject": {"Data": f"StoryPipeline job {job_id} failed"},
-                "Body": {
-                    "Text": {
-                        "Data": (
-                            f"Job {job_id} failed.\n\n"
-                            f"Error: {error_msg}\n\n"
-                            "Check application logs for the full stack trace."
-                        ),
-                    },
-                },
-            },
-        )
-        LOGGER.info(
-            "job lifecycle",
-            extra={"job_id": job_id, "event": "failure_email_sent", "status": "ok"},
-        )
-    except Exception:  # noqa: BLE001
-        LOGGER.exception(
-            "job lifecycle",
-            extra={
-                "job_id": job_id,
-                "event": "failure_email_error",
-                "status": "error",
-            },
-        )
+        _send_failure_email(request, job_id, error_msg)
 
 
 def _send_success_email(
@@ -197,6 +152,8 @@ def _send_success_email(
 ) -> None:
     """Best-effort success email — never let delivery errors kill the job."""
     try:
+        from app.services.email import EmailService
+
         email_svc = EmailService()
         email_svc.send_success_email(
             recipient=request.parent_email,
@@ -209,16 +166,19 @@ def _send_success_email(
 
 
 def _send_failure_email(
-    request: StorybookRequest, job_id: str, error_message: str
+    request: StorybookRequest | None, job_id: str, error_message: str
 ) -> None:
     """Best-effort failure email + admin alert."""
     try:
+        from app.services.email import EmailService
+
         email_svc = EmailService()
-        email_svc.send_failure_email(
-            recipient=request.parent_email,
-            job_id=job_id,
-            error_message=error_message,
-        )
+        if request is not None:
+            email_svc.send_failure_email(
+                recipient=request.parent_email,
+                job_id=job_id,
+                error_message=error_message,
+            )
         email_svc.send_admin_failure_alert(
             job_id=job_id,
             error_message=error_message,
