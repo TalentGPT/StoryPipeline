@@ -183,4 +183,14 @@ Then open:
 
 ## Roadmap
 
-See `docs/roadmap.md` for the phased implementation path after this scaffold.
+| Phase | Focus | Status |
+|-------|-------|--------|
+| **V1** | Photos → PDF → email (private family use) | ✅ Complete |
+| **V1.1** | Retry, idempotency, structured logs, cleanup | Planned |
+| **V1.2** | Parent review & approval before final render | Planned |
+| **V2** | Better book design — layouts, fonts, cover, themes | Planned |
+| **V2.1** | Print-on-demand research (manual export only, no publishing automation) | Planned |
+| **V3** | Productization — multi-user, billing, landing page | Planned |
+| **Ongoing** | AI quality — prompt versioning, eval suite, cost optimization | Continuous |
+
+See [`docs/roadmap.md`](docs/roadmap.md) for detailed checklists.
