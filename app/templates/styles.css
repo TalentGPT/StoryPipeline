@@ -1,18 +1,169 @@
+/* ── Global defaults ─────────────────────────────────────────────── */
+
 @page {
+  /* Overridden per-render via inline <style> block in the template.
+     These are sensible fallbacks for previewing the HTML standalone. */
   size: 8.5in 8.5in;
   margin: 0.5in;
 }
 
-body {
-  font-family: "Georgia", serif;
-  color: #1f2937;
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-main {
-  display: flex;
+body {
+  font-family: "Georgia", "Times New Roman", serif;
+  color: #1f2937;
+  line-height: 1.6;
+  background: #fff;
+}
+
+/* ── Page sections (each becomes a printed page) ─────────────────── */
+
+.page {
+  page-break-after: always;
   min-height: 100%;
+  display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   text-align: center;
+  padding: 1rem;
+}
+
+.page:last-child {
+  page-break-after: auto;
+}
+
+/* ── Cover page ──────────────────────────────────────────────────── */
+
+.cover-page {
+  gap: 1rem;
+}
+
+.cover-title {
+  font-size: 2.4rem;
+  color: #4338ca;
+  margin-bottom: 0.25rem;
+}
+
+.cover-subtitle {
+  font-size: 1.3rem;
+  font-style: italic;
+  color: #6366f1;
+}
+
+.dedication {
+  margin-top: 1.5rem;
+  font-size: 1rem;
+  font-style: italic;
+  color: #7c3aed;
+}
+
+.reading-age {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: #9ca3af;
+  letter-spacing: 0.05em;
+}
+
+/* ── Characters page ─────────────────────────────────────────────── */
+
+.characters-page h2 {
+  font-size: 1.6rem;
+  color: #4338ca;
+  margin-bottom: 1.2rem;
+}
+
+.character-list {
+  list-style: none;
+  width: 100%;
+  max-width: 28rem;
+  text-align: left;
+}
+
+.character-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  background: #f9fafb;
+}
+
+.char-name {
+  font-size: 1.1rem;
+  color: #1e40af;
+  display: block;
+}
+
+.char-role {
+  font-size: 0.85rem;
+  color: #6b7280;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.char-desc {
+  font-size: 0.95rem;
+  color: #374151;
+}
+
+/* ── Story pages ─────────────────────────────────────────────────── */
+
+.story-page {
+  text-align: left;
+  justify-content: flex-start;
+  align-items: stretch;
+  padding-top: 1.5rem;
+}
+
+.page-number {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-align: right;
+  margin-bottom: 0.5rem;
+}
+
+.story-text p {
+  font-size: 1.15rem;
+  margin-bottom: 0.85rem;
+  text-indent: 1.5rem;
+  line-height: 1.8;
+}
+
+.illustration-placeholder {
+  margin-top: auto;
+  padding: 1rem;
+  border: 2px dashed #d1d5db;
+  border-radius: 0.5rem;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.85rem;
+  min-height: 3rem;
+}
+
+/* ── Closing page ────────────────────────────────────────────────── */
+
+.closing-page {
+  gap: 1.5rem;
+}
+
+.closing-page h2 {
+  font-size: 2rem;
+  color: #4338ca;
+}
+
+.moral-summary {
+  font-size: 1.1rem;
+  font-style: italic;
+  color: #374151;
+  max-width: 26rem;
+}
+
+.closing-note {
+  font-size: 0.95rem;
+  color: #6b7280;
+  max-width: 26rem;
 }

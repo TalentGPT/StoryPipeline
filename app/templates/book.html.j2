@@ -2,13 +2,63 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>{{ title or "Family Storybook" }}</title>
+    <title>{{ title }}</title>
     <link rel="stylesheet" href="styles.css" />
+    {# Allow dynamic page size / margin from settings #}
+    <style>
+      @page {
+        size: {{ page_size }};
+        margin: {{ page_margin }};
+      }
+    </style>
   </head>
   <body>
-    <main>
-      <h1>{{ title or "Family Storybook" }}</h1>
-      <p>Placeholder template for the generated children’s storybook PDF.</p>
-    </main>
+
+    {# ── Cover page ─────────────────────────────────────── #}
+    <section class="page cover-page">
+      <h1 class="cover-title">{{ title }}</h1>
+      <p class="cover-subtitle">{{ subtitle }}</p>
+      {% if dedication %}
+      <p class="dedication">{{ dedication }}</p>
+      {% endif %}
+      <p class="reading-age">Ages {{ reading_age }}</p>
+    </section>
+
+    {# ── Characters page ────────────────────────────────── #}
+    <section class="page characters-page">
+      <h2>Meet the Characters</h2>
+      <ul class="character-list">
+        {% for char in characters %}
+        <li class="character-card">
+          <strong class="char-name">{{ char.name }}</strong>
+          <span class="char-role">{{ char.story_role }}</span>
+          <p class="char-desc">{{ char.magical_description }}</p>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    {# ── Story pages ────────────────────────────────────── #}
+    {% for page in pages %}
+    <section class="page story-page">
+      <div class="page-number">{{ page.page_number }}</div>
+      <div class="story-text">
+        {% for paragraph in page.text %}
+        <p>{{ paragraph }}</p>
+        {% endfor %}
+      </div>
+      <div class="illustration-placeholder">
+        <em>🎨 {{ page.illustration_note }}</em>
+      </div>
+    </section>
+    {% endfor %}
+
+    {# ── Closing page ───────────────────────────────────── #}
+    <section class="page closing-page">
+      <h2>The End</h2>
+      <p class="moral-summary">{{ moral_summary }}</p>
+      <p class="closing-note">{{ closing_note }}</p>
+    </section>
+
   </body>
 </html>
