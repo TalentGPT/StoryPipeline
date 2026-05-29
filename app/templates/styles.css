@@ -1,0 +1,18 @@
+@page {
+  size: 8.5in 8.5in;
+  margin: 0.5in;
+}
+
+body {
+  font-family: "Georgia", serif;
+  color: #1f2937;
+}
+
+main {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}

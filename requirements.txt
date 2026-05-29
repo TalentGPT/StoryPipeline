@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-dotenv
+boto3
+openai
+jinja2
+weasyprint
+pillow
+pytest
+httpx
+python-multipart
