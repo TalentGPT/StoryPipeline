@@ -11,3 +11,4 @@ pillow
 pytest
 httpx
 python-multipart
+email-validator

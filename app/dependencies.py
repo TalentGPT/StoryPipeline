@@ -1,3 +1,5 @@
+import hmac
+
 from fastapi import Depends, Header, HTTPException, status
 
 from app.config import Settings, get_settings
@@ -12,7 +14,17 @@ async def validate_api_key(
     if not settings.require_api_key:
         return
 
-    if not x_storybook_api_key or x_storybook_api_key != settings.api_key:
+    if not x_storybook_api_key or not settings.api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key.",
+        )
+
+    # Constant-time comparison to prevent timing side-channel attacks.
+    if not hmac.compare_digest(
+        x_storybook_api_key.encode("utf-8"),
+        settings.api_key.encode("utf-8"),
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key.",

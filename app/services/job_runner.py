@@ -1,8 +1,7 @@
 """Background job runner for storybook processing.
 
-Orchestrates: vision → story generation (with critic retry loop) → PDF → delivery.
-Currently wired for mock-mode and ready for full pipeline integration once
-vision produces an ``ImageDescriptionSet``.
+Orchestrates: image load → vision → story generation (with critic retry loop)
+→ PDF → S3 upload → email delivery.
 """
 
 from __future__ import annotations
@@ -12,6 +11,7 @@ import time
 from app.config import get_settings
 from app.logging_config import get_logger
 from app.models.requests import StorybookRequest
+from app.services.image_utils import load_decoded_images
 from app.services.job_store import JobStore
 from app.services.pdf import render_pdf
 from app.services.storage import StorageService
@@ -19,6 +19,7 @@ from app.services.story_generation import (
     StoryGenerationError,
     generate_storybook_with_retries,
 )
+from app.services.vision import describe_images
 
 LOGGER = get_logger(__name__)
 
@@ -37,12 +38,13 @@ def _concise_error(exc: Exception) -> str:
 def process_storybook_job(job_id: str) -> None:
     """Background job entry point for single-instance processing.
 
-    Pipeline steps (wired incrementally):
+    Pipeline steps:
         1. Load job & request
-        2. Vision analysis  →  ImageDescriptionSet   (TODO: wire real vision)
-        3. Story generation with critic retry loop
-        4. PDF rendering
-        5. S3 upload + email delivery
+        2. Load decoded images from work directory
+        3. Vision analysis  →  ImageDescriptionSet
+        4. Story generation with critic retry loop
+        5. PDF rendering
+        6. S3 upload + email delivery
     """
     settings = get_settings()
     job_store = JobStore(settings.job_store_path)
@@ -68,8 +70,27 @@ def process_storybook_job(job_id: str) -> None:
         # ── Parse the request ───────────────────────────────────────
         request = StorybookRequest.model_validate(job.request_json)
 
-        # ── Vision step (placeholder) ──────────────────────────────
-        image_description_set = _build_placeholder_descriptions(request)
+        # ── Load persisted images from work directory ──────────────
+        decoded_images = load_decoded_images(settings.work_dir, job_id)
+        LOGGER.info(
+            "job lifecycle",
+            extra={
+                "job_id": job_id,
+                "event": "images_loaded",
+                "image_count": len(decoded_images),
+            },
+        )
+
+        # ── Vision step — describe each image ─────────────────────
+        image_description_set = describe_images(request, decoded_images)
+        LOGGER.info(
+            "job lifecycle",
+            extra={
+                "job_id": job_id,
+                "event": "vision_complete",
+                "description_count": len(image_description_set.descriptions),
+            },
+        )
 
         # ── Story generation with retries ──────────────────────────
         story = generate_storybook_with_retries(
@@ -185,28 +206,6 @@ def _send_failure_email(
         )
     except Exception:  # noqa: BLE001
         LOGGER.exception("failure email delivery failed", extra={"job_id": job_id})
-
-
-def _build_placeholder_descriptions(request: StorybookRequest):
-    """Build a minimal ``ImageDescriptionSet`` from the request media list.
-
-    This is a temporary bridge until the vision service is wired into
-    the job runner.  It produces descriptions just complete enough for
-    ``generate_storybook_with_retries`` to work in mock mode.
-    """
-    from app.models.story import ImageDescription, ImageDescriptionSet
-
-    descriptions = [
-        ImageDescription(
-            image_id=m.id,
-            setting="a family scene",
-            subjects=["family members"],
-            actions="spending time together",
-            mood="joyful",
-        )
-        for m in request.media
-    ]
-    return ImageDescriptionSet(descriptions=descriptions)
 
 
 __all__ = ["process_storybook_job"]

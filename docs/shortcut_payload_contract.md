@@ -1,44 +1,99 @@
 # Shortcut Payload Contract
 
-## Purpose
+## Endpoint
 
-The iPhone Share Sheet Shortcut sends a single JSON POST request to the FastAPI ingest endpoint. The API should acknowledge quickly with a processing status so the Shortcut avoids timing out.
+- **Method:** `POST`
+- **Path:** `/v1/storybooks`
+- **Header:** `X-Storybook-Api-Key`
+- **Content-Type:** `application/json`
 
-## V1 Payload Shape
+## V1 Contract Notes
+
+- V1 server accepts **images only**.
+- If the parent selects a video, the Shortcut should try to convert it into a single JPEG thumbnail/frame.
+- If that is not possible, the Shortcut should skip the video and show a user-visible note.
+- Send **raw base64 only** in `data_base64`, not a `data:image/jpeg;base64,...` prefix.
+- Base64 increases payload size significantly.
+- Recommended V1 target:
+  - **6–12 compressed images**
+  - **1280px long edge**
+  - **JPEG quality around 65–75%**
+  - **total request under `MAX_REQUEST_BYTES`**
+- If JSON payloads become too large, the future alternative is **presigned direct S3 uploads**.
+
+## Sample Request JSON
 
 ```json
 {
-  "request_id": "uuid-generated-on-device",
-  "submitted_at": "2026-05-29T18:00:00Z",
+  "request_id": "6d7cf484-6d0b-4d2f-b470-6c90fcae5c33",
   "parent_email": "parent@example.com",
-  "child_age_range": "5-7",
-  "trip_title": "Disney Cruise Adventure",
-  "memory_notes": "Optional context from parent",
+  "book_options": {
+    "title_hint": "Our Magic Cruise",
+    "theme": "ocean adventure",
+    "reading_age": "5-7",
+    "parent_review": false,
+    "dedication": "For Beckham and Roman"
+  },
+  "characters": [
+    {
+      "name": "Roman",
+      "role": "big brother hero",
+      "age": 4,
+      "pronouns": "he/him",
+      "traits": ["curious", "brave", "kind"]
+    },
+    {
+      "name": "Beckham",
+      "role": "little explorer",
+      "age": 1,
+      "pronouns": "he/him",
+      "traits": ["joyful", "gentle"]
+    }
+  ],
+  "core_values": [
+    "courage",
+    "kindness",
+    "gratitude",
+    "teamwork"
+  ],
   "media": [
     {
-      "filename": "IMG_1234.jpg",
-      "content_type": "image/jpeg",
-      "base64_data": "...",
-      "width": 1536,
-      "height": 1024,
-      "source_kind": "photo"
+      "id": "img-001",
+      "original_filename": "IMG_1234.HEIC",
+      "original_media_type": "photo",
+      "mime_type": "image/jpeg",
+      "width": 1280,
+      "height": 960,
+      "captured_at": "2026-05-29T16:20:00Z",
+      "data_base64": "ZmFrZS1iYXNlNjQtZGF0YQ=="
+    },
+    {
+      "id": "vid-thumb-001",
+      "original_filename": "IMG_5678.MOV",
+      "original_media_type": "video_frame",
+      "mime_type": "image/jpeg",
+      "width": 1280,
+      "height": 720,
+      "captured_at": "2026-05-29T16:24:00Z",
+      "data_base64": "bW9yZS1mYWtlLWJhc2U2NA=="
     }
   ]
 }
 ```
 
-## Contract Notes
-
-- The Shortcut should compress/resize assets before upload.
-- Videos should be handled conservatively in V1 and may be reduced to thumbnails plus metadata.
-- The API should respond immediately with a job receipt, for example:
+## Accepted Response JSON
 
 ```json
 {
+  "job_id": "job_01J123EXAMPLE",
   "status": "processing",
-  "request_id": "uuid-generated-on-device"
+  "message": "Your storybook is being created.",
+  "status_url": "https://example.com/v1/storybooks/job_01J123EXAMPLE"
 }
 ```
 
-- Authentication can begin with a simple API key header in V1.
-- Keep the payload single-shot and private for family use.
+## Future Alternative
+
+If this JSON contract becomes too large or fragile in practice, the next step is:
+- presigned direct S3 upload for media
+- small metadata-only request to FastAPI referencing uploaded objects
